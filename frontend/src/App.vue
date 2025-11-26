@@ -7,10 +7,12 @@
     </main>
     <Footer />
   </div>
+  <Analytics />
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
+import { Analytics } from '@vercel/analytics/vue'
 import LandingPage from './pages/LandingPage.vue'
 import ReferralPage from './pages/ReferralPage.vue'
 import GradientBackground from './components/GradientBackground.vue'
