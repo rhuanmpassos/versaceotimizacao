@@ -10,6 +10,7 @@
         v-motion
         :initial="motionBase"
         :enter="{ ...motionEnter, transition: { delay: 0.1 } }"
+        style="will-change: transform, opacity;"
       />
       <Input
         v-model="form.whatsapp"
@@ -20,21 +21,27 @@
         v-motion
         :initial="motionBase"
         :enter="{ ...motionEnter, transition: { delay: 0.2 } }"
+        style="will-change: transform, opacity;"
       />
     </div>
-    <Button
-      type="submit"
-      :disabled="loading"
-      class="w-full md:w-auto"
-      v-motion
-      :initial="motionBase"
-      :enter="{ ...motionEnter, transition: { delay: 0.3 } }"
-    >
-      <span v-if="!loading">Quero Otimizar Meu PC</span>
-      <span v-else>Enviando...</span>
-    </Button>
-    <p v-if="success" class="text-sm text-emerald-300">Recebemos seus dados! Em breve entraremos em contato.</p>
-    <p v-if="error" class="text-sm text-rose-300">{{ error }}</p>
+    <div class="min-h-[48px]">
+      <Button
+        type="submit"
+        :disabled="loading"
+        class="w-full md:w-auto"
+        v-motion
+        :initial="motionBase"
+        :enter="{ ...motionEnter, transition: { delay: 0.3 } }"
+        style="will-change: transform, opacity;"
+      >
+        <span v-if="!loading">Quero Otimizar Meu PC</span>
+        <span v-else>Enviando...</span>
+      </Button>
+    </div>
+    <div class="min-h-[24px]">
+      <p v-if="success" class="text-sm text-emerald-300">Recebemos seus dados! Em breve entraremos em contato.</p>
+      <p v-if="error" class="text-sm text-rose-300">{{ error }}</p>
+    </div>
   </form>
 </template>
 

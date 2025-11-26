@@ -28,7 +28,7 @@
         </p>
         <div
           id="lead-form"
-          class="mt-10"
+          class="mt-10 min-h-[200px]"
           v-motion
           :initial="motionBase"
           :enter="{ ...motionEnter, transition: { delay: 0.3 } }"
@@ -38,10 +38,11 @@
       </div>
       <div class="relative flex items-center justify-center lg:justify-end">
         <div
-          class="relative w-full max-w-md rounded-[32px] border border-white/10 bg-gradient-to-br from-white/8 via-white/5 to-transparent p-8 text-white shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-3xl"
+          class="relative w-full max-w-md rounded-[32px] border border-white/10 bg-gradient-to-br from-white/8 via-white/5 to-transparent p-8 text-white shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-3xl min-h-[400px]"
           v-motion
           :initial="{ opacity: 0, scale: 0.9 }"
           :enter="{ opacity: 1, scale: 1, transition: { delay: 0.4, type: 'spring', damping: 18 } }"
+          style="will-change: transform, opacity;"
         >
           <div class="absolute -top-6 right-10 text-sm uppercase tracking-[0.3em] text-white/50">100% Custom</div>
           <div class="space-y-6">

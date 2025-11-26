@@ -12,9 +12,18 @@
         v-motion
         :initial="{ opacity: 0, x: reverse ? 40 : -40 }"
         :enter="{ opacity: 1, x: 0, transition: { delay: 0.2 } }"
+        style="will-change: transform, opacity;"
       >
-        <div class="relative w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/20 shadow-[0_20px_60px_rgba(0,0,0,0.55)]">
-          <img :src="image" :alt="imageAlt" class="h-full w-full object-cover" loading="lazy" />
+        <div class="relative w-full overflow-hidden rounded-[28px] border border-white/10 bg-black/20 shadow-[0_20px_60px_rgba(0,0,0,0.55)]" style="aspect-ratio: 16/9; min-height: 300px;">
+          <img 
+            :src="image" 
+            :alt="imageAlt" 
+            class="absolute inset-0 h-full w-full object-cover" 
+            loading="lazy"
+            width="1200"
+            height="675"
+            decoding="async"
+          />
           <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-black/40"></div>
         </div>
         <span class="pointer-events-none absolute -left-10 top-10 h-24 w-24 rounded-full bg-cyan-500/20 blur-3xl"></span>
@@ -25,6 +34,7 @@
         v-motion
         :initial="{ opacity: 0, y: 30 }"
         :enter="{ opacity: 1, y: 0, transition: { delay: 0.1 } }"
+        style="will-change: transform, opacity;"
       >
         <FeatureBlock :eyebrow="eyebrow" :title="title" :description="description" :items="items" />
       </div>
