@@ -194,6 +194,11 @@ CORS_ALLOWED_ORIGIN=https://seusite.com,https://outrosite.com
 NEXT_PUBLIC_SITE_URL=https://seusite.com
 REFERRAL_BASE_URL=https://seusite.com
 
+# Discord (Notificações)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+DISCORD_BOT_TOKEN=seu_bot_token_aqui
+DISCORD_USER_ID=seu_user_id_aqui
+
 # Ambiente
 NODE_ENV=production
 ```

@@ -69,11 +69,21 @@ Este guia mostra passo a passo como fazer o deploy do projeto no plano **gratuit
    REFERRAL_BASE_URL=https://seu-projeto-frontend.vercel.app
    ```
    
+   **Variáveis para Discord (Notificações - Opcional):**
+   ```
+   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+   DISCORD_BOT_TOKEN=seu_bot_token_aqui
+   DISCORD_USER_ID=seu_user_id_aqui
+   ```
+   
    > **Importante**: 
    > - Substitua `postgresql://usuario:senha@host:porta/database?sslmode=require` pela URL real do seu banco
    > - Substitua `seu-projeto-frontend.vercel.app` pela URL do frontend (você vai criar depois)
    > - Se tiver múltiplas origens permitidas, separe por vírgula: `https://site1.com,https://site2.com`
    > - O `REFERRAL_BASE_URL` é usado para gerar links de referral corretos
+   > - O `DISCORD_WEBHOOK_URL` é usado para enviar notificações no canal quando um novo lead é criado
+   > - O `DISCORD_BOT_TOKEN` e `DISCORD_USER_ID` são usados para enviar notificações no PV (mensagem direta)
+   > - Todas as variáveis do Discord são opcionais, mas recomendadas para receber notificações
 
 3. Clique em **"Deploy"**
 

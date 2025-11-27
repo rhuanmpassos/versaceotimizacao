@@ -11,6 +11,7 @@ import {
   sanitizeError,
   rateLimit,
 } from '../../utils/security'
+import { sendDiscordNotification } from '../../utils/discord'
 
 // Rate limiter específico para leads (mais restritivo)
 const leadRateLimit = rateLimit({
@@ -169,7 +170,28 @@ export default async function handler(req, res) {
       }
     }
 
-    await prisma.lead.create({
+    // Buscar nome do referrer se houver referral_code
+    let referrerNome = null
+    if (data.referral_code) {
+      try {
+        const referrer = await prisma.referrer.findUnique({
+          where: {
+            referral_code: data.referral_code,
+          },
+          select: {
+            nome: true,
+          },
+        })
+        if (referrer) {
+          referrerNome = referrer.nome
+        }
+      } catch (error) {
+        console.error('[Leads] Erro ao buscar referrer:', error.message)
+        // Não bloqueia a criação do lead se falhar ao buscar o referrer
+      }
+    }
+
+    const lead = await prisma.lead.create({
       data: {
         ...data,
         whatsapp: normalizedWhatsApp, // Salva o WhatsApp normalizado
@@ -177,6 +199,34 @@ export default async function handler(req, res) {
         user_agent: normalizedUserAgent !== 'unknown' ? userAgent : null,
       },
     })
+
+    console.info('[Leads] Lead criado com sucesso:', {
+      id: lead.id,
+      nome: data.nome,
+      whatsapp: normalizedWhatsApp,
+      referral_code: data.referral_code || null,
+      referrerNome: referrerNome || null,
+    })
+
+    // Enviar notificação para Discord (não bloqueia a resposta)
+    console.info('[Leads] Iniciando envio de notificação Discord...')
+    sendDiscordNotification({
+      nome: data.nome,
+      whatsapp: normalizedWhatsApp,
+      referrerNome: referrerNome,
+    })
+      .then((success) => {
+        if (success) {
+          console.info('[Leads] Notificação Discord enviada com sucesso')
+        } else {
+          console.warn('[Leads] Notificação Discord não foi enviada (verifique logs do Discord)')
+        }
+      })
+      .catch((error) => {
+        console.error('[Leads] Erro ao enviar notificação Discord:', error)
+        console.error('[Leads] Stack trace:', error.stack)
+        // Não falha a requisição se o Discord falhar
+      })
 
     return res.status(201).json({ success: true })
   } catch (error) {
