@@ -42,23 +42,25 @@
           
           <!-- Link de Indicação -->
           <div class="rounded-xl border border-white/10 bg-white/5 p-4">
-            <p class="text-sm text-white/70 mb-2">Seu link de indicação:</p>
-<<<<<<< Current (Your changes)
-            <div class="overflow-x-auto bg-black/20 rounded-lg p-3 mb-3">
-              <code class="text-cyan-300 font-mono text-sm whitespace-nowrap">{{ referralLink }}</code>
-=======
-            <div class="flex flex-col sm:flex-row gap-3">
-              <p class="flex-1 break-all text-cyan-300 font-mono text-sm bg-black/20 rounded-lg p-3">
-                {{ referralLink }}
-              </p>
-              <Button type="button" class="flex-shrink-0" @click="copyReferralLink">
-                {{ copied ? '✓ Copiado!' : 'Copiar' }}
-              </Button>
->>>>>>> Incoming (Background Agent changes)
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-sm text-white/70">Seu link de indicação:</p>
+              <button 
+                type="button" 
+                class="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/20 px-3 py-1.5 text-xs font-medium text-cyan-300 transition-colors hover:bg-cyan-500/30"
+                @click="copyReferralLink"
+              >
+                <svg v-if="!copied" class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+                <svg v-else class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                {{ copied ? 'Copiado!' : 'Copiar' }}
+              </button>
             </div>
-            <Button type="button" @click="copyReferralLink">
-              {{ copied ? '✓ Copiado!' : 'Copiar Link' }}
-            </Button>
+            <p class="break-all text-cyan-300 font-mono text-sm bg-black/20 rounded-lg p-3">
+              {{ referralLink }}
+            </p>
           </div>
         </div>
       </Card>
