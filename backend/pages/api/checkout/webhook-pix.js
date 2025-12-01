@@ -6,8 +6,13 @@ import { validateWebhook } from '../../../utils/openpix'
  * Documentação: https://developers.openpix.com.br/docs/webhook/webhook-overview
  */
 export default async function handler(req, res) {
+  // Aceitar GET/HEAD para validação do webhook pela OpenPix
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    return res.status(200).json({ status: 'ok', message: 'Webhook endpoint is active' })
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
+    res.setHeader('Allow', 'POST, GET, HEAD')
     return res.status(405).json({ message: 'Method not allowed' })
   }
 
