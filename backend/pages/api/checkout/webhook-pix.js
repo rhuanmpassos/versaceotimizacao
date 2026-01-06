@@ -1,6 +1,7 @@
 import prisma from '../../../lib/prisma'
 import { validateWebhook, getChargeStatus } from '../../../utils/openpix'
 import { sendPaymentNotification } from '../../../utils/discord'
+import { queuePaymentConfirmedMessage, queuePaymentAbandonedMessage } from '../../../utils/messageQueue'
 
 /**
  * Webhook da OpenPix para receber notificações de pagamento PIX
@@ -187,6 +188,14 @@ async function handleChargeCompleted(transaction, charge) {
     } catch (notifyError) {
       console.error('[OpenPix Webhook] Erro ao notificar pagamento aprovado:', notifyError.message)
     }
+
+    // Enfileirar mensagem de confirmação via WhatsApp
+    try {
+      await queuePaymentConfirmedMessage(transaction.lead)
+      console.info('[OpenPix Webhook] Mensagem de confirmação enfileirada')
+    } catch (whatsappError) {
+      console.error('[OpenPix Webhook] Erro ao enfileirar mensagem WhatsApp:', whatsappError.message)
+    }
   }
 }
 
@@ -203,4 +212,12 @@ async function handleChargeExpired(transaction) {
       status: 'canceled',
     },
   })
+
+  // Enfileirar mensagem de abandono via WhatsApp
+  try {
+    await queuePaymentAbandonedMessage(transaction.lead)
+    console.info('[OpenPix Webhook] Mensagem de abandono enfileirada')
+  } catch (whatsappError) {
+    console.error('[OpenPix Webhook] Erro ao enfileirar mensagem WhatsApp:', whatsappError.message)
+  }
 }

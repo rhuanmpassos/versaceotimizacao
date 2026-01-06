@@ -15,18 +15,19 @@ enum LeadStage {
 }
 
 model Lead {
-  id            String        @id @default(uuid())
-  nome          String
-  whatsapp      String
-  email         String?
-  referral_code String?
-  tracking_id   String?       // Cookie ID para correlacionar mesma pessoa
-  ip            String?
-  user_agent    String?
-  stage         LeadStage     @default(NA_BASE)
-  created_at    DateTime      @default(now())
-  transactions  Transaction[]
-  meetings      Meeting[]
+  id                String             @id @default(uuid())
+  nome              String
+  whatsapp          String
+  email             String?
+  referral_code     String?
+  tracking_id       String?            // Cookie ID para correlacionar mesma pessoa
+  ip                String?
+  user_agent        String?
+  stage             LeadStage          @default(NA_BASE)
+  created_at        DateTime           @default(now())
+  transactions      Transaction[]
+  meetings          Meeting[]
+  whatsapp_messages WhatsAppMessage[]
 
   @@index([tracking_id])
 }
@@ -144,4 +145,39 @@ model Meeting {
   @@index([lead_id])
   @@index([affiliate_id])
   @@index([meeting_date])
+}
+
+// Controle de mensagens do WhatsApp (anti-flood + tracking)
+enum WhatsAppMessageType {
+  LEAD_WELCOME         // Mensagem 1: Boas vindas após cadastro (2min delay)
+  PAYMENT_ABANDONED    // Mensagem 2: Pagamento não finalizado
+  PAYMENT_CONFIRMED    // Mensagem 3: Compra confirmada
+}
+
+enum WhatsAppMessageStatus {
+  PENDING    // Aguardando envio
+  SENT       // Enviada com sucesso
+  FAILED     // Falhou ao enviar
+  CANCELLED  // Cancelada (ex: outra ação ocorreu antes)
+}
+
+model WhatsAppMessage {
+  id           String                  @id @default(uuid())
+  lead_id      String
+  phone        String                  // Número de telefone
+  message_type WhatsAppMessageType
+  status       WhatsAppMessageStatus   @default(PENDING)
+  message_text String?                 // Texto enviado (para log)
+  send_after   DateTime                // Quando deve ser enviada
+  sent_at      DateTime?               // Quando foi enviada
+  error        String?                 // Erro se falhou
+  created_at   DateTime                @default(now())
+  updated_at   DateTime                @updatedAt
+
+  lead Lead @relation(fields: [lead_id], references: [id])
+
+  @@index([lead_id])
+  @@index([status])
+  @@index([send_after])
+  @@index([message_type, lead_id])
 }

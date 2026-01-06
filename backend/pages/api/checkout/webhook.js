@@ -1,6 +1,7 @@
 import prisma from '../../../lib/prisma'
 import stripe from '../../../utils/stripe'
 import { sendPaymentNotification } from '../../../utils/discord'
+import { queuePaymentConfirmedMessage, queuePaymentAbandonedMessage } from '../../../utils/messageQueue'
 
 // Desabilitar parsing do body para receber o raw body
 export const config = {
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
   }
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-  
+
   if (!webhookSecret) {
     console.error('STRIPE_WEBHOOK_SECRET não configurado')
     return res.status(500).json({ error: 'Webhook não configurado' })
@@ -95,21 +96,21 @@ async function handlePaymentIntentCreated(paymentIntent) {
 // Handler para payment_intent.processing
 async function handlePaymentIntentProcessing(paymentIntent) {
   console.log(`PaymentIntent processing: ${paymentIntent.id}`)
-  
+
   await updateTransactionStatus(paymentIntent.id, 'processing')
 }
 
 // Handler para payment_intent.requires_action
 async function handlePaymentIntentRequiresAction(paymentIntent) {
   console.log(`PaymentIntent requires_action: ${paymentIntent.id}`)
-  
+
   await updateTransactionStatus(paymentIntent.id, 'requires_action')
 }
 
 // Handler para payment_intent.succeeded - O MAIS IMPORTANTE!
 async function handlePaymentIntentSucceeded(paymentIntent) {
   console.log(`PaymentIntent succeeded: ${paymentIntent.id}`)
-  
+
   // Buscar a transação
   const transaction = await prisma.transaction.findFirst({
     where: { stripe_payment_intent: paymentIntent.id },
@@ -174,21 +175,44 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     } catch (notifyError) {
       console.error('[Stripe Webhook] Erro ao notificar pagamento aprovado:', notifyError.message)
     }
+
+    // Enfileirar mensagem de confirmação via WhatsApp
+    try {
+      await queuePaymentConfirmedMessage(transaction.lead)
+      console.info('[Stripe Webhook] Mensagem de confirmação enfileirada')
+    } catch (whatsappError) {
+      console.error('[Stripe Webhook] Erro ao enfileirar mensagem WhatsApp:', whatsappError.message)
+    }
   }
 }
 
 // Handler para payment_intent.payment_failed
 async function handlePaymentIntentFailed(paymentIntent) {
   console.log(`PaymentIntent failed: ${paymentIntent.id}`)
-  
+
   // Manter como requires_payment_method para que o usuário possa tentar novamente
   await updateTransactionStatus(paymentIntent.id, 'requires_payment_method')
+
+  // Buscar transação para enfileirar mensagem de abandono
+  const transaction = await prisma.transaction.findFirst({
+    where: { stripe_payment_intent: paymentIntent.id },
+    include: { lead: true },
+  })
+
+  if (transaction) {
+    try {
+      await queuePaymentAbandonedMessage(transaction.lead)
+      console.info('[Stripe Webhook] Mensagem de abandono enfileirada')
+    } catch (whatsappError) {
+      console.error('[Stripe Webhook] Erro ao enfileirar mensagem WhatsApp:', whatsappError.message)
+    }
+  }
 }
 
 // Handler para payment_intent.canceled
 async function handlePaymentIntentCanceled(paymentIntent) {
   console.log(`PaymentIntent canceled: ${paymentIntent.id}`)
-  
+
   await updateTransactionStatus(paymentIntent.id, 'canceled')
 }
 

@@ -12,6 +12,7 @@ import {
   rateLimit,
 } from '../../utils/security'
 import { sendDiscordNotification } from '../../utils/discord'
+import { queueLeadWelcomeMessage } from '../../utils/messageQueue'
 
 // Rate limiter específico para leads (mais restritivo)
 const leadRateLimit = rateLimit({
@@ -58,7 +59,7 @@ const normalizeUserAgent = (userAgent) => {
 export default async function handler(req, res) {
   // Apply security headers
   setSecurityHeaders(req, res)
-  
+
   if (applyCors(req, res)) {
     return
   }
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
 
     // Normalizar o referral_code para validações
     const normalizedReferralCode = data.referral_code?.toLowerCase()
-    
+
     // Validações de segurança em múltiplas camadas quando há referral_code
     if (normalizedReferralCode) {
       const existingLeads = await prisma.lead.findMany({
@@ -211,7 +212,7 @@ export default async function handler(req, res) {
     // Buscar referrer se houver referral_code e verificar se está ativo
     let referrerNome = null
     let validReferralCode = null
-    
+
     if (data.referral_code) {
       try {
         const referrer = await prisma.referrer.findUnique({
@@ -224,7 +225,7 @@ export default async function handler(req, res) {
             referral_code: true,
           },
         })
-        
+
         if (referrer && referrer.ativo) {
           referrerNome = referrer.nome
           validReferralCode = referrer.referral_code
@@ -263,7 +264,7 @@ export default async function handler(req, res) {
         whatsapp: normalizedWhatsApp,
         referrerNome: referrerNome,
       })
-      
+
       if (discordSuccess) {
         console.info('[Leads] Notificação Discord enviada com sucesso')
       } else {
@@ -274,14 +275,28 @@ export default async function handler(req, res) {
       // Não falha a requisição se o Discord falhar
     }
 
-    return res.status(201).json({ 
+    // Enfileirar mensagem de boas-vindas via WhatsApp (será enviada após 2 minutos se não houver pagamento)
+    console.info('[Leads] Enfileirando mensagem WhatsApp de boas-vindas...')
+    try {
+      await queueLeadWelcomeMessage({
+        id: lead.id,
+        nome: data.nome,
+        whatsapp: normalizedWhatsApp,
+      })
+      console.info('[Leads] Mensagem WhatsApp enfileirada para envio em 2 minutos')
+    } catch (whatsappError) {
+      console.error('[Leads] Erro ao enfileirar mensagem WhatsApp:', whatsappError.message)
+      // Não falha a requisição se o WhatsApp falhar
+    }
+
+    return res.status(201).json({
       success: true,
       lead_id: lead.id,
       lead_name: lead.nome,
     })
   } catch (error) {
     const isProduction = process.env.NODE_ENV === 'production'
-    
+
     // Log error details only in development
     if (!isProduction) {
       console.error('Erro em /api/leads', error)
