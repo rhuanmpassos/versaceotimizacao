@@ -1,5 +1,6 @@
 import prisma from '../../../lib/prisma'
-import { validateWebhook } from '../../../utils/openpix'
+import { validateWebhook, getChargeStatus } from '../../../utils/openpix'
+import { sendPaymentNotification } from '../../../utils/discord'
 
 /**
  * Webhook da OpenPix para receber notificações de pagamento PIX
@@ -19,9 +20,6 @@ export default async function handler(req, res) {
   try {
     const signature = req.headers['x-webhook-signature']
     const payload = req.body
-
-    console.log('[OpenPix Webhook] Evento recebido:', payload.event)
-    console.log('[OpenPix Webhook] Payload completo:', JSON.stringify(payload, null, 2))
 
     // Detectar webhook de teste da OpenPix
     // O webhook de teste tem apenas: { "data_criacao": "...", "event": "OPENPIX:CHARGE_COMPLETED" }
@@ -54,6 +52,7 @@ export default async function handler(req, res) {
     // Buscar transação
     const transaction = await prisma.transaction.findUnique({
       where: { id: transactionId },
+      include: { lead: true, affiliate: true },
     })
 
     if (!transaction) {
@@ -62,9 +61,14 @@ export default async function handler(req, res) {
     }
 
     switch (event) {
-      case 'OPENPIX:CHARGE_COMPLETED':
+      case 'OPENPIX:CHARGE_COMPLETED': {
+        const verified = await verifyChargeCompleted(transaction)
+        if (!verified) {
+          return res.status(200).json({ received: true })
+        }
         await handleChargeCompleted(transaction, charge)
         break
+      }
 
       case 'OPENPIX:CHARGE_EXPIRED':
         await handleChargeExpired(transaction)
@@ -84,9 +88,44 @@ export default async function handler(req, res) {
     // Sempre retornar 200 para webhooks, mesmo em caso de erro
     // Isso evita retentativas desnecessárias da OpenPix
     // Mas logar o erro para investigação
-    console.error('[OpenPix Webhook] Erro ao processar:', error)
-    console.error('[OpenPix Webhook] Stack:', error.stack)
+    console.error('[OpenPix Webhook] Erro ao processar:', error?.message || error)
     return res.status(200).json({ received: true, error: 'Erro processado internamente' })
+  }
+}
+
+const normalizeStatus = (status) => String(status || '').trim().toUpperCase()
+
+async function verifyChargeCompleted(transaction) {
+  try {
+    const charge = await getChargeStatus(transaction.id)
+    const status = normalizeStatus(charge?.status)
+
+    if (status !== 'COMPLETED') {
+      console.warn('[OpenPix Webhook] Status não confirmado para transação:', {
+        transactionId: transaction.id,
+        status,
+      })
+      return false
+    }
+
+    if (typeof charge?.value === 'number' && charge.value !== transaction.amount_product) {
+      console.warn('[OpenPix Webhook] Valor divergente na cobrança:', {
+        transactionId: transaction.id,
+      })
+      return false
+    }
+
+    if (charge?.correlationID && charge.correlationID !== transaction.id) {
+      console.warn('[OpenPix Webhook] CorrelationID divergente na cobrança:', {
+        transactionId: transaction.id,
+      })
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('[OpenPix Webhook] Erro ao validar cobrança:', error?.message || error)
+    return false
   }
 }
 
@@ -96,11 +135,14 @@ export default async function handler(req, res) {
 async function handleChargeCompleted(transaction, charge) {
   console.log('[OpenPix] Pagamento confirmado:', transaction.id)
 
+  const alreadySucceeded = transaction.status === 'succeeded'
+
   // Atualizar status da transação
   await prisma.transaction.update({
     where: { id: transaction.id },
     data: {
       status: 'succeeded',
+      payment_method: 'pix',
     },
   })
 
@@ -132,6 +174,20 @@ async function handleChargeCompleted(transaction, charge) {
   })
 
   console.log('[OpenPix] Lead atualizado para COMPRADO:', transaction.lead_id)
+
+  if (!alreadySucceeded) {
+    try {
+      await sendPaymentNotification({
+        type: 'payment_succeeded',
+        provider: 'OpenPix',
+        lead: transaction.lead,
+        affiliate: transaction.affiliate,
+        transaction,
+      })
+    } catch (notifyError) {
+      console.error('[OpenPix Webhook] Erro ao notificar pagamento aprovado:', notifyError.message)
+    }
+  }
 }
 
 /**
@@ -148,4 +204,3 @@ async function handleChargeExpired(transaction) {
     },
   })
 }
-

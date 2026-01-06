@@ -1,5 +1,6 @@
 import prisma from '../../../lib/prisma'
 import stripe from '../../../utils/stripe'
+import { sendPaymentNotification } from '../../../utils/discord'
 
 // Desabilitar parsing do body para receber o raw body
 export const config = {
@@ -87,7 +88,7 @@ export default async function handler(req, res) {
 // Handler para payment_intent.created
 async function handlePaymentIntentCreated(paymentIntent) {
   console.log(`PaymentIntent created: ${paymentIntent.id}`)
-  
+
   await updateTransactionStatus(paymentIntent.id, 'requires_payment_method')
 }
 
@@ -109,11 +110,10 @@ async function handlePaymentIntentRequiresAction(paymentIntent) {
 async function handlePaymentIntentSucceeded(paymentIntent) {
   console.log(`PaymentIntent succeeded: ${paymentIntent.id}`)
   
-  const { lead_id, affiliate_id, scheduled_date, scheduled_time } = paymentIntent.metadata
-
   // Buscar a transação
   const transaction = await prisma.transaction.findFirst({
     where: { stripe_payment_intent: paymentIntent.id },
+    include: { lead: true, affiliate: true },
   })
 
   if (!transaction) {
@@ -121,12 +121,15 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     return
   }
 
+  const alreadySucceeded = transaction.status === 'succeeded'
+  const paymentMethod = paymentIntent.payment_method_types?.[0] === 'pix' ? 'pix' : 'card'
+
   // Atualizar status da transação
   await prisma.transaction.update({
     where: { id: transaction.id },
     data: {
       status: 'succeeded',
-      payment_method: paymentIntent.payment_method_types?.[0] === 'pix' ? 'pix' : 'card',
+      payment_method: paymentMethod,
     },
   })
 
@@ -158,6 +161,20 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   })
 
   console.log(`Lead ${transaction.lead_id} atualizado para COMPRADO`)
+
+  if (!alreadySucceeded) {
+    try {
+      await sendPaymentNotification({
+        type: 'payment_succeeded',
+        provider: 'Stripe',
+        lead: transaction.lead,
+        affiliate: transaction.affiliate,
+        transaction: { ...transaction, payment_method: paymentMethod },
+      })
+    } catch (notifyError) {
+      console.error('[Stripe Webhook] Erro ao notificar pagamento aprovado:', notifyError.message)
+    }
+  }
 }
 
 // Handler para payment_intent.payment_failed
@@ -186,4 +203,3 @@ async function updateTransactionStatus(paymentIntentId, status) {
     console.error(`Erro ao atualizar status da transação:`, error)
   }
 }
-

@@ -20,6 +20,20 @@ const tokenSchema = z.string()
   .length(64, 'Token inválido')
   .regex(/^[a-f0-9]+$/, 'Token inválido')
 
+const getAccessToken = (req) => {
+  const authHeader = req.headers.authorization
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim()
+  }
+
+  const headerToken = req.headers['x-referral-token']
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.trim()
+  }
+
+  return req.query?.token
+}
+
 // Normaliza a chave PIX (remove +55 de telefone, mantém resto igual)
 const normalizePixKey = (pixKey) => {
   // Se começa com +55, remove
@@ -90,7 +104,8 @@ export default async function handler(req, res) {
 
   try {
     // Validar token
-    const sanitizedToken = sanitizeString(req.query?.token || '', 64).toLowerCase()
+    const rawToken = getAccessToken(req)
+    const sanitizedToken = sanitizeString(rawToken || '', 64).toLowerCase()
     const token = tokenSchema.parse(sanitizedToken)
 
     // Buscar referrer pelo access_token

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import prisma from '../../../lib/prisma'
 import stripe, { AMOUNT_PRODUCT, AMOUNT_AFFILIATE } from '../../../utils/stripe'
+import { sendPaymentNotification } from '../../../utils/discord'
 import { applyCors } from '../../../utils/cors'
 import {
   setSecurityHeaders,
@@ -80,9 +81,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout] Correlação por WhatsApp: ${lead.whatsapp}`)
-        }
       }
 
       // 2. Tentar por E-mail
@@ -95,9 +93,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout] Correlação por E-mail: ${lead.email}`)
-        }
       }
 
       // 3. Tentar por Tracking ID (cookie)
@@ -110,9 +105,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout] Correlação por Cookie/Tracking ID: ${lead.tracking_id}`)
-        }
       }
 
       // 4. Tentar por IP + User Agent (fingerprint básico)
@@ -126,15 +118,11 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout] Correlação por IP+UA: ${lead.ip}`)
-        }
       }
 
       // Se encontrou lead original, herdar o referral_code
       if (originalLead) {
         referralCode = originalLead.referral_code
-        console.log(`[Checkout] Lead ${lead.id} herdou referral_code ${referralCode} do lead ${originalLead.id}`)
         
         // Atualizar o lead atual com o referral_code
         await prisma.lead.update({
@@ -269,6 +257,26 @@ export default async function handler(req, res) {
         scheduled_time: new Date(`1970-01-01T${data.scheduled_time}:00`),
       },
     })
+
+    const leadForNotification = data.email ? { ...lead, email: data.email } : lead
+    console.info('[Checkout] Iniciando notificacao de pagamento criado (Stripe)...')
+    try {
+      const notified = await sendPaymentNotification({
+        type: 'payment_created',
+        provider: 'Stripe',
+        lead: leadForNotification,
+        affiliate,
+        transaction,
+      })
+
+      if (notified) {
+        console.info('[Checkout] Notificacao de pagamento criado enviada')
+      } else {
+        console.warn('[Checkout] Notificacao de pagamento criado nao enviada')
+      }
+    } catch (notifyError) {
+      console.error('[Checkout] Erro ao enviar notificacao de pagamento criado:', notifyError.message)
+    }
 
     return res.status(200).json({
       clientSecret: paymentIntent.client_secret,

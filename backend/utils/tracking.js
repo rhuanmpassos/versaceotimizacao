@@ -89,7 +89,7 @@ export async function getLocationFromIP(ip) {
 
   try {
     // Usar ip-api.com (gratuito, 45 req/min)
-    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city`, {
+    const response = await fetch(`https://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city`, {
       timeout: 2000,
     })
     

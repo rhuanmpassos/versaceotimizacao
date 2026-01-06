@@ -93,7 +93,9 @@ export default {
   },
   async getReferralStats(token) {
     try {
-      return await apiClient.get(`/referral/stats?token=${token}`)
+      return await apiClient.get('/referral/stats', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
     } catch (error) {
       error.message = extractMessage(error, 'Não foi possível carregar as estatísticas.')
       throw error
@@ -102,7 +104,11 @@ export default {
 
   async updatePixKey(token, pixKey) {
     try {
-      return await apiClient.put(`/referral/update-pix?token=${token}`, { pix_key: pixKey })
+      return await apiClient.put(
+        '/referral/update-pix',
+        { pix_key: pixKey },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
     } catch (error) {
       error.message = extractMessage(error, 'Não foi possível salvar a chave PIX.')
       throw error

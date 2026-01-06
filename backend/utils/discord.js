@@ -74,8 +74,7 @@ async function sendWebhookNotification({ nome, whatsapp, referrerNome = null }) 
       embeds: [embed],
     }
 
-    console.info('[Discord] Enviando webhook para:', webhookUrl.substring(0, 50) + '...')
-    console.info('[Discord] Payload:', JSON.stringify(payload, null, 2))
+    console.info('[Discord] Enviando webhook de lead')
 
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -225,6 +224,228 @@ async function sendDirectMessage({ nome, whatsapp, referrerNome = null }) {
   }
 }
 
+function formatCurrency(amountCents) {
+  if (typeof amountCents !== 'number') {
+    return 'N/A'
+  }
+  const formatted = (amountCents / 100).toFixed(2).replace('.', ',')
+  return `R$ ${formatted}`
+}
+
+const pad2 = (value) => String(value).padStart(2, '0')
+
+function formatDateUtc(date) {
+  if (!(date instanceof Date)) {
+    return 'N/A'
+  }
+  const day = pad2(date.getUTCDate())
+  const month = pad2(date.getUTCMonth() + 1)
+  const year = date.getUTCFullYear()
+  return `${day}/${month}/${year}`
+}
+
+function formatTimeUtc(time) {
+  if (!(time instanceof Date)) {
+    return 'N/A'
+  }
+  const hours = pad2(time.getUTCHours())
+  const minutes = pad2(time.getUTCMinutes())
+  return `${hours}:${minutes}`
+}
+
+function formatSchedule(scheduledDate, scheduledTime) {
+  const dateLabel = scheduledDate instanceof Date ? formatDateUtc(scheduledDate) : null
+  const timeLabel = scheduledTime instanceof Date ? formatTimeUtc(scheduledTime) : null
+
+  if (dateLabel && timeLabel) {
+    return `${dateLabel} ${timeLabel}`
+  }
+  return dateLabel || timeLabel || 'N/A'
+}
+
+function formatPaymentMethod(method) {
+  if (!method) {
+    return 'N/A'
+  }
+  return method === 'pix' ? 'PIX' : 'Cartao'
+}
+
+function buildPaymentMessage({ type, lead, transaction, affiliate, provider }) {
+  const details = type === 'payment_created'
+    ? { content: '**Pagamento gerado**', title: 'Pagamento gerado', color: 0xf1c40f }
+    : { content: '**Pagamento aprovado**', title: 'Pagamento aprovado', color: 0x2ecc71 }
+
+  const leadData = lead || transaction?.lead || {}
+  const affiliateData = affiliate || transaction?.affiliate || null
+
+  const fields = [
+    { name: 'Nome', value: leadData.nome || 'N/A', inline: true },
+    { name: 'WhatsApp', value: leadData.whatsapp ? formatWhatsApp(leadData.whatsapp) : 'N/A', inline: true },
+    { name: 'Email', value: leadData.email || 'N/A', inline: true },
+    { name: 'Valor', value: formatCurrency(transaction?.amount_product), inline: true },
+    { name: 'Metodo', value: formatPaymentMethod(transaction?.payment_method), inline: true },
+    { name: 'Provedor', value: provider || 'N/A', inline: true },
+    { name: 'Agendamento', value: formatSchedule(transaction?.scheduled_date, transaction?.scheduled_time), inline: false },
+  ]
+
+  if (transaction?.id) {
+    fields.push({ name: 'Transacao', value: transaction.id, inline: false })
+  }
+
+  if (transaction?.stripe_payment_intent) {
+    fields.push({ name: 'Referencia', value: transaction.stripe_payment_intent, inline: false })
+  }
+
+  if (affiliateData?.nome) {
+    fields.push({ name: 'Indicado por', value: affiliateData.nome, inline: false })
+  }
+
+  const embed = {
+    title: details.title,
+    color: details.color,
+    fields,
+    timestamp: new Date().toISOString(),
+  }
+
+  return { content: details.content, embed }
+}
+
+async function sendWebhookPaymentNotification({ type, lead, transaction, affiliate, provider }) {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL
+
+  if (!webhookUrl) {
+    console.warn('[Discord] DISCORD_WEBHOOK_URL nao configurada para pagamento')
+    return false
+  }
+
+  try {
+    const { content, embed } = buildPaymentMessage({ type, lead, transaction, affiliate, provider })
+
+    const payload = {
+      content: content,
+      username: 'Payment Bot',
+      embeds: [embed],
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Discord] Erro ao enviar webhook de pagamento:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+      })
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('[Discord] Erro ao enviar webhook de pagamento:', {
+      message: error.message,
+      stack: error.stack,
+    })
+    return false
+  }
+}
+
+async function sendPaymentDirectMessage({ type, lead, transaction, affiliate, provider }) {
+  let botToken = process.env.DISCORD_BOT_TOKEN
+  let userId = process.env.DISCORD_USER_ID
+
+  if (botToken) {
+    botToken = botToken.trim().replace(/^["']|["']$/g, '')
+  }
+  if (userId) {
+    userId = userId.trim().replace(/^["']|["']$/g, '')
+  }
+
+  if (!botToken || !userId) {
+    console.warn('[Discord] DISCORD_BOT_TOKEN ou DISCORD_USER_ID nao configurados para pagamento', {
+      hasBotToken: !!botToken,
+      hasUserId: !!userId,
+    })
+    return false
+  }
+
+  if (botToken.length < 50) {
+    console.error('[Discord] DISCORD_BOT_TOKEN parece invalido (muito curto)')
+    return false
+  }
+
+  try {
+    const dmChannelResponse = await fetch('https://discord.com/api/v10/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        recipient_id: userId,
+      }),
+    })
+
+    if (!dmChannelResponse.ok) {
+      const errorText = await dmChannelResponse.text()
+      let errorDetails
+      try {
+        errorDetails = JSON.parse(errorText)
+      } catch {
+        errorDetails = errorText
+      }
+
+      console.error('[Discord] Erro ao criar canal DM para pagamento:', {
+        status: dmChannelResponse.status,
+        statusText: dmChannelResponse.statusText,
+        error: errorDetails,
+      })
+      return false
+    }
+
+    const dmChannel = await dmChannelResponse.json()
+    const channelId = dmChannel.id
+
+    const { content, embed } = buildPaymentMessage({ type, lead, transaction, affiliate, provider })
+    const messagePayload = {
+      content: content,
+      embeds: [embed],
+    }
+
+    const messageResponse = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messagePayload),
+    })
+
+    if (!messageResponse.ok) {
+      const errorText = await messageResponse.text()
+      console.error('[Discord] Erro ao enviar DM de pagamento:', {
+        status: messageResponse.status,
+        statusText: messageResponse.statusText,
+        error: errorText,
+      })
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error('[Discord] Erro ao enviar DM de pagamento:', {
+      message: error.message,
+      stack: error.stack,
+    })
+    return false
+  }
+}
+
 /**
  * Build admin notification message
  */
@@ -359,9 +580,6 @@ export async function sendAdminNotification(options) {
  */
 export async function sendDiscordNotification({ nome, whatsapp, referrerNome = null }) {
   console.info('[Discord] Iniciando envio de notificações...', {
-    nome,
-    whatsapp,
-    referrerNome,
     hasWebhookUrl: !!process.env.DISCORD_WEBHOOK_URL,
     hasBotToken: !!process.env.DISCORD_BOT_TOKEN,
     hasUserId: !!process.env.DISCORD_USER_ID,
@@ -392,6 +610,50 @@ export async function sendDiscordNotification({ nome, whatsapp, referrerNome = n
   console.info('[Discord] Resultado final:', { webhookOk, dmOk, success: webhookOk || dmOk })
 
   // Return true if at least one succeeded
+  return webhookOk || dmOk
+}
+
+/**
+ * Send payment notification to Discord (webhook and DM)
+ * @param {Object} options - Notification options
+ * @param {string} options.type - Type: 'payment_created' | 'payment_succeeded'
+ * @param {Object} options.lead - Lead data
+ * @param {Object} options.transaction - Transaction data
+ * @param {Object} options.affiliate - Affiliate data (optional)
+ * @param {string} options.provider - Provider label (Stripe/OpenPix)
+ * @returns {Promise<boolean>} Success status
+ */
+export async function sendPaymentNotification({ type, lead, transaction, affiliate, provider }) {
+  console.info('[Discord] Iniciando notificacao de pagamento...', {
+    type,
+    provider,
+    hasWebhookUrl: !!process.env.DISCORD_WEBHOOK_URL,
+    hasBotToken: !!process.env.DISCORD_BOT_TOKEN,
+    hasUserId: !!process.env.DISCORD_USER_ID,
+  })
+
+  const [webhookSuccess, dmSuccess] = await Promise.allSettled([
+    sendWebhookPaymentNotification({ type, lead, transaction, affiliate, provider }),
+    sendPaymentDirectMessage({ type, lead, transaction, affiliate, provider }),
+  ])
+
+  if (webhookSuccess.status === 'rejected') {
+    console.error('[Discord] Webhook de pagamento falhou:', webhookSuccess.reason)
+  } else {
+    console.info('[Discord] Webhook de pagamento resultado:', webhookSuccess.value)
+  }
+
+  if (dmSuccess.status === 'rejected') {
+    console.error('[Discord] DM de pagamento falhou:', dmSuccess.reason)
+  } else {
+    console.info('[Discord] DM de pagamento resultado:', dmSuccess.value)
+  }
+
+  const webhookOk = webhookSuccess.status === 'fulfilled' && webhookSuccess.value === true
+  const dmOk = dmSuccess.status === 'fulfilled' && dmSuccess.value === true
+
+  console.info('[Discord] Resultado final pagamento:', { webhookOk, dmOk, success: webhookOk || dmOk })
+
   return webhookOk || dmOk
 }
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import prisma from '../../../lib/prisma'
 import { createPixCharge } from '../../../utils/openpix'
+import { sendPaymentNotification } from '../../../utils/discord'
 import { applyCors } from '../../../utils/cors'
 import {
   setSecurityHeaders,
@@ -79,9 +80,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout PIX] Correlação por WhatsApp: ${lead.whatsapp}`)
-        }
       }
 
       // 2. Tentar por E-mail
@@ -94,9 +92,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout PIX] Correlação por E-mail: ${lead.email}`)
-        }
       }
 
       // 3. Tentar por Tracking ID (cookie)
@@ -109,9 +104,6 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout PIX] Correlação por Cookie/Tracking ID: ${lead.tracking_id}`)
-        }
       }
 
       // 4. Tentar por IP + User Agent (fingerprint básico)
@@ -125,15 +117,11 @@ export default async function handler(req, res) {
           },
           orderBy: { created_at: 'asc' },
         })
-        if (originalLead) {
-          console.log(`[Checkout PIX] Correlação por IP+UA: ${lead.ip}`)
-        }
       }
 
       // Se encontrou lead original, herdar o referral_code
       if (originalLead) {
         referralCode = originalLead.referral_code
-        console.log(`[Checkout PIX] Lead ${lead.id} herdou referral_code ${referralCode} do lead ${originalLead.id}`)
         
         // Atualizar o lead atual com o referral_code
         await prisma.lead.update({
@@ -225,13 +213,33 @@ export default async function handler(req, res) {
     })
 
     // Atualizar transação com dados do PIX
-    await prisma.transaction.update({
+    const updatedTransaction = await prisma.transaction.update({
       where: { id: transaction.id },
       data: {
         stripe_payment_intent: `openpix_${pixCharge.correlationID}`, // Usar campo existente para guardar referência
         status: 'processing',
       },
     })
+
+    const leadForNotification = data.email ? { ...lead, email: data.email } : lead
+    console.info('[Checkout] Iniciando notificacao de pagamento criado (OpenPix)...')
+    try {
+      const notified = await sendPaymentNotification({
+        type: 'payment_created',
+        provider: 'OpenPix',
+        lead: leadForNotification,
+        affiliate,
+        transaction: updatedTransaction,
+      })
+
+      if (notified) {
+        console.info('[Checkout] Notificacao de pagamento criado enviada')
+      } else {
+        console.warn('[Checkout] Notificacao de pagamento criado nao enviada')
+      }
+    } catch (notifyError) {
+      console.error('[Checkout] Erro ao enviar notificacao de pagamento criado:', notifyError.message)
+    }
 
     return res.status(200).json({
       transaction_id: transaction.id,

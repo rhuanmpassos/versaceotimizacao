@@ -120,15 +120,7 @@ export default async function handler(req, res) {
     }
 
     // Verificar senha
-    // Debug temporário
-    console.log('[DEBUG] Hash completo:', ADMIN_PASSWORD_HASH)
-    console.log('[DEBUG] Hash tamanho:', ADMIN_PASSWORD_HASH ? ADMIN_PASSWORD_HASH.length : 'undefined')
-    console.log('[DEBUG] Hash começa com:', ADMIN_PASSWORD_HASH ? ADMIN_PASSWORD_HASH.substring(0, 10) : 'undefined')
-    console.log('[DEBUG] Senha recebida:', password)
-    console.log('[DEBUG] Email correto:', email === ADMIN_EMAIL.toLowerCase())
-    
     const passwordValid = await bcrypt.compare(password, ADMIN_PASSWORD_HASH)
-    console.log('[DEBUG] Password valid:', passwordValid)
     
     if (!passwordValid) {
       console.warn('[Admin Auth] Tentativa de login com senha inválida:', { email, ip })

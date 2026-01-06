@@ -26,5 +26,9 @@
   },
   "devDependencies": {
     "baseline-browser-mapping": "^2.8.32"
+  },
+  "overrides": {
+    "jws": "3.2.3",
+    "qs": "6.14.1"
   }
 }

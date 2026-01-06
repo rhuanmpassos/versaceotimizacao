@@ -94,18 +94,9 @@ export default async function handler(req, res) {
     const ip = extractIp(req)
     const user_agent = sanitizeString(req.headers['user-agent'] || 'unknown', 500)
     
-    console.info('[Track] IP extraído:', ip)
-    console.info('[Track] UTMs recebidos:', { 
-      utm_source: trackingParams.utm_source, 
-      utm_medium: trackingParams.utm_medium, 
-      utm_campaign: trackingParams.utm_campaign 
-    })
-    
     // Extrair dados de tracking adicionais (do request + body)
     // includeLocation = false para não bloquear a resposta (pode ser feito async depois)
     const trackingData = await extractTrackingData(req, trackingParams, ip, false)
-
-    console.info('[Track] Dados de tracking extraídos:', trackingData)
 
     // Verificar se este IP já foi registrado para este referral_code
     const existingHit = await prisma.referralHit.findFirst({
@@ -125,15 +116,11 @@ export default async function handler(req, res) {
         user_agent,
         ...trackingData,
       }
-      console.info('[Track] Criando novo hit:', hitData)
-      
       await prisma.referralHit.create({
         data: hitData,
       })
       isNewClick = true
-      console.info('[Track] Hit criado com sucesso!')
     } else {
-      console.info('[Track] IP já registrado, ignorando:', ip)
     }
 
     // Contar total de cliques únicos (cada registro = 1 IP único)

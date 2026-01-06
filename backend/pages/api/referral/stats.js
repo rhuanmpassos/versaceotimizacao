@@ -22,6 +22,20 @@ const tokenSchema = z.object({
     .regex(/^[a-f0-9]+$/, 'Token inválido'),
 })
 
+const getAccessToken = (req) => {
+  const authHeader = req.headers.authorization
+  if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim()
+  }
+
+  const headerToken = req.headers['x-referral-token']
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.trim()
+  }
+
+  return req.query?.token
+}
+
 // Constantes de liberação de pagamento (em dias)
 const CARD_RELEASE_DAYS = 31
 const PIX_RELEASE_DAYS = 7
@@ -46,7 +60,8 @@ export default async function handler(req, res) {
 
   try {
     // Sanitize input
-    const sanitizedToken = sanitizeString(req.query?.token || '', 64).toLowerCase()
+    const rawToken = getAccessToken(req)
+    const sanitizedToken = sanitizeString(rawToken || '', 64).toLowerCase()
 
     const { token } = tokenSchema.parse({ token: sanitizedToken })
     
@@ -85,17 +100,6 @@ export default async function handler(req, res) {
         created_at: true,
         scheduled_date: true,
         scheduled_time: true,
-        lead_id: true,
-        lead: {
-          select: {
-            nome: true,
-            whatsapp: true,
-            email: true,
-            tracking_id: true,
-            ip: true,
-            user_agent: true,
-          },
-        },
       },
       orderBy: { created_at: 'desc' },
     })
@@ -129,7 +133,6 @@ export default async function handler(req, res) {
 
       return {
         id: tx.id,
-        leadName: tx.lead?.nome || 'Cliente',
         amount: amountAffiliate,
         paymentMethod: tx.payment_method,
         createdAt: tx.created_at,
@@ -145,52 +148,19 @@ export default async function handler(req, res) {
       where: { referral_code: referrer.referral_code },
       select: {
         id: true,
-        nome: true,
-        whatsapp: true,
-        email: true,
-        tracking_id: true,
         stage: true,
         created_at: true,
       },
       orderBy: { created_at: 'desc' },
-      take: 100, // Buscar mais para poder agrupar
+      take: 100, // Limitar para não sobrecarregar a resposta
     })
 
-    // Prioridade de stage (maior = mais importante)
-    const stagePriority = {
-      'COMPRADO': 100,
-      'EM_CONTATO': 50,
-      'NA_BASE': 30,
-      'REJEITADO': 10,
-    }
-
-    // Agrupar referrals por pessoa (WhatsApp > Email > Tracking ID > ID)
-    const referralsByPerson = new Map()
-    
-    const getReferralPersonKey = (r) => {
-      if (r.whatsapp) return `whatsapp:${r.whatsapp}`
-      if (r.email) return `email:${r.email}`
-      if (r.tracking_id) return `tracking:${r.tracking_id}`
-      return `lead:${r.id}`
-    }
-    
-    for (const r of referrals) {
-      const personKey = getReferralPersonKey(r)
-      const existing = referralsByPerson.get(personKey)
-      
-      // Se não existe ou o novo tem stage mais importante, substitui
-      if (!existing || (stagePriority[r.stage] || 0) > (stagePriority[existing.stage] || 0)) {
-        referralsByPerson.set(personKey, r)
-      }
-    }
-
-    // Formatar indicações para o frontend (agrupadas por pessoa)
-    const formattedReferrals = Array.from(referralsByPerson.values())
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    // Formatar indicações para o frontend (sem dados pessoais)
+    const formattedReferrals = referrals
       .slice(0, 50) // Limitar a 50
       .map(r => ({
         id: r.id,
-        nome: r.nome,
+        label: 'Indicação',
         status: r.stage === 'COMPRADO' ? 'Convertido' : 
                 r.stage === 'EM_CONTATO' ? 'Em contato' : 
                 r.stage === 'REJEITADO' ? 'Não converteu' : 'Pendente',
@@ -208,42 +178,8 @@ export default async function handler(req, res) {
       'succeeded': 'Aprovado',
     }
 
-    // Prioridade de status (maior = mais importante)
-    const statusPriority = {
-      'succeeded': 100,
-      'processing': 80,
-      'requires_action': 70,
-      'requires_confirmation': 60,
-      'requires_payment_method': 50,
-      'requires_capture': 40,
-      'canceled': 10,
-    }
-
-    // Agrupar transações por pessoa usando múltiplos identificadores
-    // Prioridade: WhatsApp > E-mail > IP+UA > lead_id
-    const transactionsByPerson = new Map()
-    
-    const getPersonKey = (tx) => {
-      // Tentar identificar a pessoa por múltiplos fatores (ordem de prioridade)
-      if (tx.lead?.whatsapp) return `whatsapp:${tx.lead.whatsapp}`
-      if (tx.lead?.email) return `email:${tx.lead.email}`
-      if (tx.lead?.tracking_id) return `tracking:${tx.lead.tracking_id}`
-      if (tx.lead?.ip && tx.lead?.user_agent) return `fingerprint:${tx.lead.ip}:${tx.lead.user_agent.substring(0, 50)}`
-      return `lead:${tx.lead_id}`
-    }
-    
-    for (const tx of allTransactions) {
-      const personKey = getPersonKey(tx)
-      const existing = transactionsByPerson.get(personKey)
-      
-      // Se não existe ou a nova tem prioridade maior, substitui
-      if (!existing || (statusPriority[tx.status] || 0) > (statusPriority[existing.status] || 0)) {
-        transactionsByPerson.set(personKey, tx)
-      }
-    }
-
-    // Preparar dados das transações (uma por pessoa, a mais relevante)
-    const allTransactionsData = Array.from(transactionsByPerson.values()).map(tx => {
+    // Preparar dados das transações (sem dados pessoais)
+    const allTransactionsData = allTransactions.map(tx => {
       const amountAffiliate = tx.amount_affiliate / 100
       const createdAt = new Date(tx.created_at)
       
@@ -260,9 +196,7 @@ export default async function handler(req, res) {
 
       return {
         id: tx.id,
-        leadId: tx.lead_id,
-        leadName: tx.lead?.nome || 'Cliente',
-        leadWhatsapp: tx.lead?.whatsapp || null,
+        label: 'Cliente',
         amount: amountAffiliate,
         paymentMethod: tx.payment_method,
         status: tx.status,

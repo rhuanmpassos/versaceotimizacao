@@ -174,10 +174,8 @@ export default async function handler(req, res) {
     })
 
     if (existingLead) {
-      console.info('[Leads] WhatsApp já cadastrado, retornando lead existente:', {
+      console.info('[Leads] Lead existente encontrado:', {
         id: existingLead.id,
-        nome: existingLead.nome,
-        whatsapp: normalizedWhatsApp,
       })
 
       // Retorna o lead existente em vez de criar duplicata
@@ -253,10 +251,7 @@ export default async function handler(req, res) {
 
     console.info('[Leads] Lead criado com sucesso:', {
       id: lead.id,
-      nome: data.nome,
-      whatsapp: normalizedWhatsApp,
       referral_code: validReferralCode || null,
-      referrerNome: referrerNome || null,
     })
 
     // Enviar notificação para Discord (DEVE aguardar em serverless)
