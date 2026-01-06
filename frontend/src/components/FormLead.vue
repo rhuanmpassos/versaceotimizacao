@@ -12,17 +12,20 @@
         :enter="{ ...motionEnter, transition: { delay: 0.1 } }"
         style="will-change: transform, opacity;"
       />
-      <Input
-        v-model="form.whatsapp"
-        name="whatsapp"
-        placeholder="WhatsApp"
-        autocomplete="tel"
+      <div
         class="flex-1"
         v-motion
         :initial="motionBase"
         :enter="{ ...motionEnter, transition: { delay: 0.2 } }"
         style="will-change: transform, opacity;"
-      />
+      >
+        <PhoneInput
+          v-model="form.whatsapp"
+          name="whatsapp"
+          placeholder="WhatsApp"
+          autocomplete="tel"
+        />
+      </div>
     </div>
     <div class="min-h-[48px]">
       <Button
@@ -49,6 +52,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Input from './Input.vue'
 import Button from './Button.vue'
+import PhoneInput from './PhoneInput.vue'
 import api from '../utils/api'
 import { getTrackingId } from '../utils/tracking'
 

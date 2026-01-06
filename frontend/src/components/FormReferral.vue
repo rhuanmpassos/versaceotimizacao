@@ -1,7 +1,7 @@
 <template>
   <form class="flex flex-col gap-5" @submit.prevent="submit">
     <Input v-model="form.nome" name="ref-nome" placeholder="Nome" autocomplete="name" />
-    <Input v-model="form.whatsapp" name="ref-whatsapp" placeholder="WhatsApp" autocomplete="tel" />
+    <PhoneInput v-model="form.whatsapp" name="ref-whatsapp" placeholder="WhatsApp" autocomplete="tel" />
     <Button type="submit" :disabled="loading">
       <span v-if="!loading">Gerar Link de Indicação</span>
       <span v-else>Gerando...</span>
@@ -15,6 +15,7 @@ import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Input from './Input.vue'
 import Button from './Button.vue'
+import PhoneInput from './PhoneInput.vue'
 import api from '../utils/api'
 
 const router = useRouter()
