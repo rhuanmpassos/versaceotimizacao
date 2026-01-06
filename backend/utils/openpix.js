@@ -19,7 +19,7 @@ export async function createPixCharge({
   value,
   comment = 'Otimização Windows - Versace',
   customer = null,
-  expiresIn = 3600,
+  expiresIn = 900,
 }) {
   const appId = process.env.OPENPIX_APP_ID
 
@@ -110,7 +110,7 @@ export function validateWebhook(payload, signature) {
   // Se houver OPENPIX_WEBHOOK_SECRET configurado, pode-se implementar validação HMAC-SHA256
   // Por enquanto, aceita todos os webhooks (comportamento padrão da OpenPix)
   const webhookSecret = process.env.OPENPIX_WEBHOOK_SECRET
-  
+
   if (!webhookSecret) {
     // OpenPix não exige webhook secret, então é normal não ter configurado
     return true

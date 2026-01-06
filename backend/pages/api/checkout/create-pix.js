@@ -27,7 +27,7 @@ const createPixSchema = z.object({
 
 export default async function handler(req, res) {
   setSecurityHeaders(req, res)
-  
+
   if (applyCors(req, res)) {
     return
   }
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
   try {
     const data = createPixSchema.parse(req.body)
-    
+
     // Verificar se o lead existe
     const lead = await prisma.lead.findUnique({
       where: { id: data.lead_id },
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
       // Se encontrou lead original, herdar o referral_code
       if (originalLead) {
         referralCode = originalLead.referral_code
-        
+
         // Atualizar o lead atual com o referral_code
         await prisma.lead.update({
           where: { id: lead.id },
@@ -140,7 +140,7 @@ export default async function handler(req, res) {
     // Verificar horário
     const scheduledDate = new Date(data.scheduled_date)
     const [hours] = data.scheduled_time.split(':').map(Number)
-    
+
     if (hours < 14) {
       return res.status(400).json({ error: 'Horário não disponível. Apenas após às 14:00.' })
     }
@@ -154,7 +154,7 @@ export default async function handler(req, res) {
     })
 
     if (existingApproved) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Este cliente já possui um agendamento aprovado.',
         code: 'ALREADY_PAID',
       })
@@ -209,7 +209,7 @@ export default async function handler(req, res) {
         phone: lead.whatsapp,
         taxID: data.cpf, // CPF do cliente
       },
-      expiresIn: 3600, // 1 hora
+      expiresIn: 900, // 15 minutos
     })
 
     // Atualizar transação com dados do PIX
@@ -252,7 +252,7 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     const isProduction = process.env.NODE_ENV === 'production'
-    
+
     console.error('Erro em /api/checkout/create-pix:', error)
 
     if (error instanceof z.ZodError) {
